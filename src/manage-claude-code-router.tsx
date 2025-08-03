@@ -1,9 +1,11 @@
-import { Action, ActionPanel, Form, showToast, Toast, useNavigation } from "@raycast/api";
+import { Action, ActionPanel, Form, showToast, Toast, useNavigation, Icon } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import * as fs from "fs";
 import * as path from "path";
 import { homedir } from "os";
 import { useState, useEffect } from "react";
+import React from "react";
+import { exec } from "child_process";
 
 interface Provider {
   name: string;
@@ -21,6 +23,11 @@ interface ClaudeCodeRouterConfig {
   Providers?: Provider[];
   Router?: {
     default?: string;
+    background?: string;
+    think?: string;
+    longContext?: string;
+    longContextThreshold?: number;
+    webSearch?: string;
   };
 }
 
@@ -55,9 +62,46 @@ async function saveClaudeCodeRouterConfig(config: ClaudeCodeRouterConfig) {
 }
 
 export default function Command() {
-  const { data: config, isLoading } = usePromise(getClaudeCodeRouterConfig);
+  const { data: config, isLoading, revalidate } = usePromise(getClaudeCodeRouterConfig);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [status, setStatus] = useState<string>("Checking...");
   const { pop } = useNavigation();
+
+  const checkStatus = () => {
+    exec("ccr status", (error, stdout) => {
+      if (error) {
+        setStatus("Not running");
+        return;
+      }
+      setStatus(stdout.trim());
+    });
+  };
+
+  const startService = () => {
+    exec("ccr start", (error) => {
+      if (error) {
+        showToast(Toast.Style.Failure, "Failed to start service", error.message);
+        return;
+      }
+      showToast(Toast.Style.Success, "Service started");
+      checkStatus();
+    });
+  };
+
+  const stopService = () => {
+    exec("ccr stop", (error) => {
+      if (error) {
+        showToast(Toast.Style.Failure, "Failed to stop service", error.message);
+        return;
+      }
+      showToast(Toast.Style.Success, "Service stopped");
+      checkStatus();
+    });
+  };
+
+  useEffect(() => {
+    checkStatus();
+  }, []);
 
   useEffect(() => {
     if (config?.Providers) {
@@ -81,7 +125,11 @@ export default function Command() {
     setProviders(newProviders);
   };
 
-  const handleSubmit = (values: Record<string, string | boolean | string[]>) => {
+  const handleSubmit = (values: Record<string, any>) => {
+    console.log("--- Form Submission ---");
+    console.log("Form Values:", JSON.stringify(values, null, 2));
+    console.log("Providers State:", JSON.stringify(providers, null, 2));
+
     const newConfig: ClaudeCodeRouterConfig = {
       PROXY_URL: values.PROXY_URL,
       LOG: values.LOG,
@@ -91,9 +139,18 @@ export default function Command() {
       Providers: providers,
       Router: {
         default: values["Router.default"],
+        background: values["Router.background"],
+        think: values["Router.think"],
+        longContext: values["Router.longContext"],
+        longContextThreshold: values.longContextThreshold ? parseInt(values.longContextThreshold, 10) : undefined,
+        webSearch: values["Router.webSearch"],
       },
     };
+
+    console.log("Saving New Config:", JSON.stringify(newConfig, null, 2));
+
     saveClaudeCodeRouterConfig(newConfig);
+    revalidate();
     pop();
   };
 
@@ -103,46 +160,86 @@ export default function Command() {
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Save Configuration" onSubmit={handleSubmit} />
-          <Action title="Add Provider" onAction={handleAddProvider} />
+          <Action title="Add Provider" onAction={handleAddProvider} shortcut={{ modifiers: ["cmd"], key: "n" }} />
+          <Action
+            title="Remove Last Provider"
+            onAction={() => handleRemoveProvider(providers.length - 1)}
+            shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+          />
+          <ActionPanel.Section title="Service">
+            <Action title="Start Service" onAction={startService} icon={Icon.Play} />
+            <Action title="Stop Service" onAction={stopService} icon={Icon.Stop} />
+            <Action title="Refresh Status" onAction={checkStatus} icon={Icon.ArrowClockwise} />
+          </ActionPanel.Section>
         </ActionPanel>
       }
     >
+      <Form.Description text={`Status: ${status}`} />
       <Form.Description text="General Settings" />
-      <Form.TextField id="PROXY_URL" title="Proxy URL" defaultValue={config?.PROXY_URL || ""} />
-      <Form.Checkbox id="LOG" label="Enable Logging" defaultValue={config?.LOG || false} />
-      <Form.TextField id="APIKEY" title="API Key" defaultValue={config?.APIKEY || ""} />
-      <Form.TextField id="HOST" title="Host" defaultValue={config?.HOST || ""} />
-      <Form.TextField id="API_TIMEOUT_MS" title="API Timeout (ms)" defaultValue={config?.API_TIMEOUT_MS || ""} />
+      <Form.TextField
+        id="PROXY_URL"
+        title="Proxy URL"
+        info="You can set a proxy for API requests, for example: 'http://127.0.0.1:7890'"
+        defaultValue={config?.PROXY_URL || ""}
+      />
+      <Form.Checkbox
+        id="LOG"
+        label="Enable Logging"
+        info="You can enable logging by setting it to true. The log file will be located at $HOME/.claude-code-router.log"
+        defaultValue={config?.LOG || false}
+      />
+      <Form.TextField
+        id="APIKEY"
+        title="API Key"
+        info="You can set a secret key to authenticate requests. When set, clients must provide this key in the Authorization header (e.g., Bearer your-secret-key) or the x-api-key header."
+        defaultValue={config?.APIKEY || ""}
+      />
+      <Form.TextField
+        id="HOST"
+        title="Host"
+        info="You can set the host address for the server. If APIKEY is not set, the host will be forced to 127.0.0.1 for security reasons to prevent unauthorized access."
+        defaultValue={config?.HOST || "127.0.0.1"}
+      />
+      <Form.TextField
+        id="API_TIMEOUT_MS"
+        title="API Timeout (ms)"
+        info="Specifies the timeout for API calls in milliseconds."
+        defaultValue={config?.API_TIMEOUT_MS || "10000"}
+      />
 
+      <Form.Separator />
       <Form.Description text="Providers" />
+
       {providers.map((provider, index) => (
-        <div key={index}>
+        <React.Fragment key={index}>
           <Form.TextField
-            id={`provider-name-${index}`}
+            id={`provider-${index}-name`}
             title={`Provider ${index + 1} Name`}
             value={provider.name}
             onChange={(value) => handleProviderChange(index, "name", value)}
           />
           <Form.TextField
-            id={`provider-api-base-url-${index}`}
+            id={`provider-${index}-api_base_url`}
             title="API Base URL"
             value={provider.api_base_url}
             onChange={(value) => handleProviderChange(index, "api_base_url", value)}
           />
           <Form.TextField
-            id={`provider-api-key-${index}`}
+            id={`provider-${index}-api_key`}
             title="API Key"
             value={provider.api_key}
             onChange={(value) => handleProviderChange(index, "api_key", value)}
           />
           <Form.TagPicker
-            id={`provider-models-${index}`}
+            id={`provider-${index}-models`}
             title="Models"
             value={provider.models}
             onChange={(value) => handleProviderChange(index, "models", value)}
-          />
-          <Action title="Remove Provider" onAction={() => handleRemoveProvider(index)} />
-        </div>
+          >
+            {/* You can add static Form.TagPicker.Item here if you have a predefined list */}
+          </Form.TagPicker>
+          <Form.Separator />
+        </React.Fragment>
       ))}
 
       <Form.Description text="Router" info="Used to set up routing rules." />
@@ -150,8 +247,43 @@ export default function Command() {
         id="Router.default"
         title="Default Route"
         placeholder="openrouter,anthropic/claude-3.5-sonnet"
-        info="Specifies the default model, which will be used for all requests if no other route is configured."
+        info="The default model for general tasks."
         defaultValue={config?.Router?.default || ""}
+      />
+      <Form.TextField
+        id="Router.background"
+        title="Background Route"
+        placeholder="openrouter,anthropic/claude-3.5-sonnet"
+        info="A model for background tasks. This can be a smaller, local model to save costs."
+        defaultValue={config?.Router?.background || ""}
+      />
+      <Form.TextField
+        id="Router.think"
+        title="Think Route"
+        placeholder="openrouter,anthropic/claude-3.5-sonnet"
+        info="A model for reasoning-heavy tasks, like Plan Mode."
+        defaultValue={config?.Router?.think || ""}
+      />
+      <Form.TextField
+        id="Router.longContext"
+        title="Long Context Route"
+        placeholder="openrouter,anthropic/claude-3.5-sonnet"
+        info="A model for handling long contexts (e.g., > 60K tokens)."
+        defaultValue={config?.Router?.longContext || ""}
+      />
+      <Form.TextField
+        id="Router.longContextThreshold"
+        title="Long Context Threshold"
+        placeholder="60000"
+        info="The token count threshold for triggering the long context model. Defaults to 60000 if not specified."
+        defaultValue={config?.Router?.longContextThreshold?.toString() || "60000"}
+      />
+      <Form.TextField
+        id="Router.webSearch"
+        title="Web Search Route"
+        placeholder="openrouter,anthropic/claude-3.5-sonnet:online"
+        info="Used for handling web search tasks and this requires the model itself to support the feature. If you're using openrouter, you need to add the :online suffix after the model name."
+        defaultValue={config?.Router?.webSearch || ""}
       />
     </Form>
   );
