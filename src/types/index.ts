@@ -6,6 +6,8 @@ export interface Project {
   recent_sessions: string[];
   hooks: string[];
   pinned: boolean;
+  agent?: "Gemini" | "Claude" | "SuperClaude" | "OpenRouter" | "Claude Code Router";
+  editor?: "VSCode" | "Cursor" | "Ghostty";
 }
 
 export interface Script {
@@ -22,12 +24,11 @@ export interface Script {
 
 export interface Session {
   id: string;
-  directory: string;
-  repo: string;
-  provider: "Gemini" | "Claude" | "SuperClaude" | "OpenRouter";
-  history: string[];
-  memory: Record<string, unknown>;
+  projectId: string; // Path to the project
+  startTime: string;
+  endTime?: string;
   active: boolean;
+  agent: "Gemini" | "Claude" | "SuperClaude" | "OpenRouter" | "None";
 }
 
 export interface SuperClaude {

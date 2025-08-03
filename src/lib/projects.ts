@@ -26,3 +26,9 @@ export async function updateProject(updatedProject: Project): Promise<void> {
     await saveProjects(projects);
   }
 }
+
+export async function removeProject(projectPath: string): Promise<void> {
+  const projects = await getProjects();
+  const updatedProjects = projects.filter((p) => p.path !== projectPath);
+  await saveProjects(updatedProjects);
+}

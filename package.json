@@ -13,6 +13,12 @@
       "title": "View Projects",
       "description": "View and manage your projects",
       "mode": "view"
+    },
+    {
+      "name": "manage-claude-code-router",
+      "title": "Manage Claude Code Router",
+      "description": "Manage the configuration for Claude Code Router",
+      "mode": "view"
     }
   ],
   "dependencies": {
