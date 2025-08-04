@@ -6,8 +6,9 @@ export interface Project {
   recent_sessions: string[];
   hooks: string[];
   pinned: boolean;
-  agent?: "Gemini" | "Claude" | "SuperClaude" | "OpenRouter" | "Claude Code Router";
+  agent?: "Gemini" | "Claude" | "OpenRouter" | "Claude Code Router";
   editor?: "VSCode" | "Cursor" | "Ghostty";
+  superclaude_commands?: string[];
 }
 
 export interface Script {

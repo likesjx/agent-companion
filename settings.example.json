@@ -1,0 +1,37 @@
+{
+  "superclaude_path": "/usr/local/bin/superclaude",
+  "default_editor": "VSCode",
+  "recent_projects": [
+    "/Users/jaredlikes/code/agent-companion/agent-companion"
+  ],
+  "pinned_projects": [
+    "/Users/jaredlikes/code/agent-companion/agent-companion"
+  ],
+  "scripts": [
+    {
+      "id": "1",
+      "name": "List Files",
+      "path": "ls -la",
+      "language": "bash",
+      "description": "Lists all files in the current directory.",
+      "tags": ["files", "bash"],
+      "associated_projects": [],
+      "last_edited": "2025-08-04T12:00:00Z",
+      "pinned": true
+    }
+  ],
+  "providers": [
+    {
+      "name": "OpenAI",
+      "api": "https://api.openai.com/v1"
+    },
+    {
+      "name": "Anthropic",
+      "api": "https://api.anthropic.com/v1"
+    }
+  ],
+  "tos_acknowledged": [
+    "user-123"
+  ],
+  "last_clean": "2025-08-04T12:00:00Z"
+}

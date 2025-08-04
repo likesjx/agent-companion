@@ -15,9 +15,12 @@ import { usePromise } from "@raycast/utils";
 import * as fs from "fs";
 import * as path from "path";
 import { Project, Session } from "../types";
-import { getProjects, addProject, updateProject, removeProject } from "./lib/projects";
+import { getProjects, addProject, updateProject, removeProject, handleUpdateProject } from "./lib/projects";
+import { ProjectSettings } from "./components/ProjectSettings";
 import { addSession } from "./lib/sessions";
 import { homedir } from "os";
+
+
 
 async function addProjectFromPath(
   pathValue: string,
@@ -98,76 +101,9 @@ async function togglePin(project: Project, revalidate: () => void) {
   revalidate();
 }
 
-async function handleUpdateProject(
-  originalPath: string,
-  updatedProject: Partial<Project>,
-  revalidate: () => void,
-  pop: () => void,
-) {
-  const projects = await getProjects();
-  const projectIndex = projects.findIndex((p) => p.path === originalPath);
 
-  if (projectIndex === -1) {
-    await showToast({
-      style: Toast.Style.Failure,
-      title: "Project not found",
-    });
-    return;
-  }
 
-  const existingProject = projects[projectIndex];
-  const newProject = { ...existingProject, ...updatedProject };
 
-  // If the path is changed, we need to remove the old project and add a new one
-  if (originalPath !== newProject.path) {
-    await removeProject(originalPath);
-    await addProject(newProject);
-  } else {
-    await updateProject(newProject);
-  }
-
-  await showToast({
-    style: Toast.Style.Success,
-    title: "Project Updated",
-    message: `Updated "${newProject.name}".`,
-  });
-
-  revalidate();
-  pop();
-}
-
-function EditProjectForm({ project, revalidate }: { project: Project; revalidate: () => void }) {
-  const { pop } = useNavigation();
-
-  return (
-    <Form
-      actions={
-        <ActionPanel>
-          <Action.SubmitForm
-            title="Update Project"
-            onSubmit={(values) => handleUpdateProject(project.path, values, revalidate, pop)}
-          />
-        </ActionPanel>
-      }
-    >
-      <Form.TextField id="name" title="Project Name" defaultValue={project.name} />
-      <Form.TextField id="path" title="Project Path" defaultValue={project.path} />
-      <Form.Dropdown id="agent" title="Code Agent" defaultValue={project.agent}>
-        <Form.Dropdown.Item value="" title="None" />
-        <Form.Dropdown.Item value="Gemini" title="Gemini" />
-        <Form.Dropdown.Item value="Claude" title="Claude" />
-        <Form.Dropdown.Item value="SuperClaude" title="SuperClaude" />
-        <Form.Dropdown.Item value="OpenRouter" title="OpenRouter" />
-        <Form.Dropdown.Item value="Claude Code Router" title="Claude Code Router" />
-      </Form.Dropdown>
-      <Form.Dropdown id="editor" title="Editor" defaultValue={project.editor}>
-        <Form.Dropdown.Item value="Ghostty" title="Ghostty (Terminal Only)" />
-        <Form.Dropdown.Item value="VSCode" title="Visual Studio Code" />
-        <Form.Dropdown.Item value="Cursor" title="Cursor" />
-      </Form.Dropdown>
-    </Form>
-  );
-}
 
 async function startNewSession(project: Project, revalidate: () => void) {
   const newSession: Session = {
@@ -241,7 +177,6 @@ function AddProjectForm({ revalidate }: { revalidate: () => void }) {
         <Form.Dropdown.Item value="" title="None" />
         <Form.Dropdown.Item value="Gemini" title="Gemini" />
         <Form.Dropdown.Item value="Claude" title="Claude" />
-        <Form.Dropdown.Item value="SuperClaude" title="SuperClaude" />
         <Form.Dropdown.Item value="OpenRouter" title="OpenRouter" />
         <Form.Dropdown.Item value="Claude Code Router" title="Claude Code Router" />
       </Form.Dropdown>
@@ -256,9 +191,16 @@ function AddProjectForm({ revalidate }: { revalidate: () => void }) {
 
 export default function Command() {
   const { data: projects, isLoading, revalidate } = usePromise(getProjects);
+  const { pop } = useNavigation();
 
   const pinnedProjects = projects?.filter((p) => p.pinned) || [];
   const unpinnedProjects = projects?.filter((p) => !p.pinned) || [];
+
+  async function handleManageProjectSubmit(project: Project, values: { superclaude_commands: string[] }) {
+    const updatedProject = { ...project, ...values };
+    await handleUpdateProject(project.path, updatedProject);
+    revalidate();
+  }
 
   return (
     <List
@@ -288,9 +230,9 @@ export default function Command() {
               <ActionPanel>
                 <Action title="Start New Session" onAction={() => startNewSession(project, revalidate)} />
                 <Action.Push
-                  title="Edit Project"
+                  title="Manage Project"
                   icon={Icon.Pencil}
-                  target={<EditProjectForm project={project} revalidate={revalidate} />}
+                  target={<ProjectSettings project={project} onSubmit={(values) => handleManageProjectSubmit(project, values)} />}
                   shortcut={{ modifiers: ["cmd"], key: "e" }}
                 />
                 <Action
@@ -307,7 +249,7 @@ export default function Command() {
                   title="Remove Project"
                   style={Action.Style.Destructive}
                   onAction={() => handleRemoveProject(project, revalidate)}
-                  shortcut={{ modifiers: ["cmd"], key: "delete" }}
+                  shortcut={{ modifiers: ["cmd", "shift"], key: "x" }}
                 />
               </ActionPanel>
             }
@@ -324,9 +266,9 @@ export default function Command() {
               <ActionPanel>
                 <Action title="Start New Session" onAction={() => startNewSession(project, revalidate)} />
                 <Action.Push
-                  title="Edit Project"
+                  title="Manage Project"
                   icon={Icon.Pencil}
-                  target={<EditProjectForm project={project} revalidate={revalidate} />}
+                  target={<ProjectSettings project={project} onSubmit={(values) => handleManageProjectSubmit(project, values)} />}
                   shortcut={{ modifiers: ["cmd"], key: "e" }}
                 />
                 <Action
@@ -343,7 +285,7 @@ export default function Command() {
                   title="Remove Project"
                   style={Action.Style.Destructive}
                   onAction={() => handleRemoveProject(project, revalidate)}
-                  shortcut={{ modifiers: ["cmd"], key: "delete" }}
+                  shortcut={{ modifiers: ["cmd", "shift"], key: "x" }}
                 />
               </ActionPanel>
             }
